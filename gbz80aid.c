@@ -488,7 +488,7 @@ void hex_to_gen(char *str, int gen)
 			conversion |= str[i++];
 			sprintf(quantity, "%d", conversion);
 		}
-		// Set as 01 if any quantity will do
+		// Set as "Any" if any quantity will do
 		else
 			quantity = "Any";
 
