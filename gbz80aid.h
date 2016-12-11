@@ -38,6 +38,7 @@ unsigned char offset_table[16][16] = {
 	{4,0,0,0,0,0,1,0,7,0,4,0,0,0,1,0}
 };
 
+// Non-prefixed gbz80 instructions
 char* opcode_table[16][16] = {
 	{"nop",   "ld",    "ld",    "inc",   "inc",   "dec",   "ld",    "rlca",
 	 "ld",    "add",   "ld",    "dec",   "inc",   "dec",   "ld",    "rrca"},
@@ -73,7 +74,7 @@ char* opcode_table[16][16] = {
 	 "ld",    "ld",    "ld",    "ei",     "-",     "-",     "cp",    "rst"}
 };
 
-
+// Non-prefixed gbz80 parameters
 char* param_table[16][16] = {
 	{"",            "bc,$xxyy",  "(bc),a",     "bc",
 	 "b",           "b",         "b,$xx",      "",
@@ -141,6 +142,7 @@ char* param_table[16][16] = {
 	 "",            "",          "$xx",        "38h"}
 };
 
+// Prefixed gbz80 instructions
 char *cb_opcode_table[16][16] = {
 	{"rlc",   "rlc",   "rlc",   "rlc",   "rlc",   "rlc",   "rlc",   "rlc",   
 	 "rrc",   "rrc",   "rrc",   "rrc",   "rrc",   "rrc",   "rrc",   "rrc"},
@@ -176,6 +178,7 @@ char *cb_opcode_table[16][16] = {
 	 "set",   "set",   "set",   "set",   "set",   "set",   "set",   "set"}
 };
 
+// Prefixed gbz80 parameters
 char *cb_param_table[16][16] = {
 	{"b",    "c",    "d",    "e",    "h",    "l",    "(hl)",    "a",
 	 "b",    "c",    "d",    "e",    "h",    "l",    "(hl)",    "a"},
@@ -211,8 +214,10 @@ char *cb_param_table[16][16] = {
 	 "7,b",  "7,c",  "7,d",  "7,e",  "7,h",  "7,l",  "7,(hl)",  "7,a"}
 };
 
+// List of prefixed instructions for quick comparison
 char *cb_set[11] = {"bit","res","rl","rlc","rr","rrc","set","sla","sra","srl","swap"};
 
+// Items included in Pokemon R/B/Y
 char *gen1_items[16][16] = {
 	{"[item 0x00]",    "Master Ball",    "Ultra Ball",     "Great Ball",
 	 "Poke Ball",      "Town Map",       "Bicycle",        "?????",
@@ -280,6 +285,7 @@ char *gen1_items[16][16] = {
 	 "TM52",           "TM53",           "TM54",           "CANCEL (TM55)"}
 };
 
+// Items included in Pokemon G/S/C
 char *gen2_items[16][16] = {
 	{"?",              "Master Ball",     "Ultra Ball",      "Brightpowder",
 	 "Great Ball",     "Poke Ball",       "Teru-Sama",       "Bicycle",
