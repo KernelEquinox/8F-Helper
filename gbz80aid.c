@@ -461,6 +461,7 @@ void asm_to_hex(char *str)
 // Converts hex string into Gen I items for 8F
 void hex_to_gen(char *str, int gen)
 {
+	strip_spaces(str);
 	int len = strlen(str);
 
 	printf("\nItem            Quantity\n");
