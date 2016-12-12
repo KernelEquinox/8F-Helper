@@ -12,19 +12,30 @@ void uppercase(char*);
 void nullify_char(char*, char);
 char* normalize_param(char*);
 void ascii2hex(char*, int);
-void jump2addr(char*, int);
+void jump2addr(char*);
 char* op2hex(char*, char*, char*);
 void hex_to_asm(char*);
 void asm_to_hex(char*);
 void hex_to_gen(char*, int);
 
 
+// Struct for holding label information
+struct Label {
+	unsigned int address;
+	char *name;
+};
+
+
 // Global offset of current byte
 int cur_offset = 0;
-// Ability to define one named jump
-int jmp_offset = 0;
+
+// Ability to define multiple labels
+int jmp_num = 0;
+struct Label *label;
+
 // File line offset
 int line_num = 1;
+
 // Read 6 chars at a time
 int hex_size = 1;
 char *hex_string;
@@ -73,6 +84,9 @@ int main(int argc, char* argv[])
 		input = hex_string;
 		fclose(file);
 	}
+
+	// Reset offset if modified
+	cur_offset = 0;
 
 	// Print results
 	if (!strcmp(format, "hex"))
@@ -236,26 +250,16 @@ char* op2hex(char *opcode, char *param, char *args)
 }
 
 
-// Converts a jump label into a jump address
-void jump2addr(char *param, int rel)
+// Converts a jump label into a relative jump address
+void jump2addr(char *param)
 {
-	char *addr;
-	int i = 0, index = 0;
-	int size = (rel ? 3 : 5);
-
-	unsigned char jmp_rel = ~(cur_offset - jmp_offset) - 1;
-
-	addr = malloc(5 * sizeof(char));
-	if (rel)
-		sprintf(addr, "%02x", jmp_rel);
-	else
-		sprintf(addr, "%04x", jmp_offset);
-	if (param[0] == ',')
-		index++;
-	param[index++] = '$';
-	for (; i < (size - 1); i++)
-		param[index + i] = *addr++;
-	param[index + i] = 0;
+	for (int i = 0; i < jmp_num; i++)
+		if (!strcmp(label[i].name, param))
+		{
+			unsigned char addr = ~(cur_offset - label[i].address) - 1;
+			param[0] = '$';
+			sprintf(param + 1, "%x", addr & 0xFF);
+		}
 }
 
 
@@ -265,9 +269,6 @@ void jump2addr(char *param, int rel)
 // Converts hex to asm and prints the results
 void hex_to_asm(char *str)
 {
-	// Reset current offset for printing purposes
-	cur_offset = 0;
-
 	// Remove spaces and calculate length
 	strip_spaces(str);
 	int len = strlen(str);
@@ -317,6 +318,7 @@ void hex_to_asm(char *str)
 			h_cursor += 3;
 		}
 
+		// Special case for the STOP instruction
 		if (h == 1 && l == 0)
 		{
 			printf("01 ");
@@ -339,6 +341,7 @@ void hex_to_asm(char *str)
 		// Modify mnemonic string if required
 		for (int x = 0; x < (arg_size * 2); x++)
 		{
+			// Swap endianness if necessary
 			if (arg_size == 2)
 				parameters[offset + ((x + 2) % 4)] = bytes[i];
 			else
@@ -367,15 +370,18 @@ void hex_to_asm(char *str)
 
 void asm_to_hex(char *str)
 {
+	int i = 0;
+	int len = 0;
 	char opcode[5] = {0};
-	char param[11] = {0};
+	char *param;
 	char *param2, *args;
 
-	// Conver to lowercase
+	// Convert to lowercase and calculate line length
 	lowercase(str);
+	len = strlen(str);
 
 	// Trim leading spaces
-	for (; *str == '\t' || *str == ' '; *str++);
+	for (; str[i] == '\t' || str[i] == ' '; i++);
 
 	// Force comments and newlines to null bytes
 	nullify_char(str, '\n');
@@ -383,63 +389,47 @@ void asm_to_hex(char *str)
 	nullify_char(str, ';');
 
 	// No instruction on this line
-	if (!*str)
+	if (!str[i])
 	{
 		line_num++;
 		return;
 	}
 
-	// Set jump location if a label was found
-	if (*str == '.' || strchr(str, ':'))
+	// Update the label array if a label was detected
+	if (str[i] == '.' || strchr(str, ':'))
 	{
-		if (!jmp_offset)
-			jmp_offset = cur_offset;
-		else
-		{
-			printf("More than one jump detected, quitting.\n");
-			exit(1);
-		}
+		nullify_char(str, ':');
+		// Dynamically expand array as needed
+		label = realloc(label, (jmp_num + 1) * sizeof(*label));
+		// Add current address and label name to array
+		label[jmp_num].address = cur_offset;
+		label[jmp_num].name = calloc(len, sizeof(char));
+		strcpy(label[jmp_num++].name, (str[i] == '.' ? str + 1 : str));
 		line_num++;
 		return;
 	}
 
 	// Fetch the instruction
-	for (int i = 0; *str > 0x20; opcode[i++] = *str++);
+	for (int k = 0; str[i] > 0x20;)
+		opcode[k++] = str[i++];
 
 	// Remove all the remaining spaces
-	strip_spaces(str);
+	strip_spaces(str + i);
 
-	// Grab the first parameter
-	for (int i = 0; *str && *str != ','; param[i++] = *str++);
+	// Detect comma location and parse accordingly
+	char *comma = strchr(str, ',');
+	if (!strcmp(opcode, "jr"))
+		if (comma)
+	 		jump2addr(comma + 1);
+	 	else
+	 		jump2addr(str + i);
+	args = normalize_param(str);
 
-	if (opcode[0] == 'j' && !strchr(str, ','))
-		if (param[0] != '$' && param[0] != '(')
-			if (opcode[1] == 'r')
-				jump2addr(param, 1);
-			else
-				jump2addr(param, 0);
+	// The rest of the string is parameter data
+	param = calloc(len, sizeof(char));
+	strcpy(param, str + i);
 
-
-	// Normalize first parameter for table lookup
-	args = normalize_param(param);
-
-	// Grab the rest as param2
-	param2 = str;
-
-	if (opcode[0] == 'j')
-		if (*param2 && param2[1] != '$')
-			if (opcode[1] == 'r')
-				jump2addr(param2, 1);
-			else
-				jump2addr(param2, 0);
-
-	// Normalize second parameter for table lookup
-	if (!*args)
-		args = normalize_param(param2);
-
-	// Combine parameters
-	strcat(param, param2);
-
+	// Special case for the STOP instruction
 	if (!strcmp(opcode, "stop"))
 		args = "01";
 
