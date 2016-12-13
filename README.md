@@ -13,6 +13,7 @@ Usage: gbz80aid [options] [hex]
 Options:
   -f file    File mode (read input from file)
   -o format  Display output in a specific format
+  -w         Disable item warning messages
   -h         Print this help message
 
 Formats:

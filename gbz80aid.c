@@ -25,6 +25,13 @@ struct Label {
 	char *name;
 };
 
+// Struct for holding error detections
+struct Error {
+	unsigned char key_quantity;
+	unsigned char duplicates;
+	unsigned char glitches;
+};
+
 
 // Global offset of current byte
 int cur_offset = 0;
@@ -40,11 +47,15 @@ int line_num = 1;
 int hex_size = 1;
 char *hex_string;
 
+// Show warnings by default
+char show_warnings = 1;
+
 
 int main(int argc, char* argv[])
 {
-	char *format = 0, *input, *filename;
-	char interactive = 0, file_mode = 0;
+	char *format = 0;
+	char *input, *filename;
+	char file_mode = 0;
 
 	// Show help
 	if (argc == 1)
@@ -62,6 +73,8 @@ int main(int argc, char* argv[])
 			format = argv[++i];
 		else if (!strcmp(argv[i], "-h"))
 			usage(argv[0]);
+		else if (!strcmp(argv[i], "-w"))
+			show_warnings = 0;
 		else
 			input = argv[i];
 	}
@@ -114,6 +127,7 @@ void usage(char *str)
 	printf("Options:\n");
 	printf("  -f file    File mode (read input from file)\n");
 	printf("  -o format  Display output in a specific format\n");
+	printf("  -w         Disable item warning messages\n");
 	printf("  -h         Print this help message\n\n");
 	printf("Formats:\n");
 	printf("  asm        GB-Z80 assembly language\n");
@@ -254,12 +268,14 @@ char* op2hex(char *opcode, char *param, char *args)
 void jump2addr(char *param)
 {
 	for (int i = 0; i < jmp_num; i++)
+	{
 		if (!strcmp(label[i].name, param))
 		{
 			unsigned char addr = ~(cur_offset - label[i].address) - 1;
 			param[0] = '$';
 			sprintf(param + 1, "%x", addr & 0xFF);
 		}
+	}
 }
 
 
@@ -398,6 +414,7 @@ void asm_to_hex(char *str)
 	// Update the label array if a label was detected
 	if (str[i] == '.' || strchr(str, ':'))
 	{
+		strip_spaces(str);
 		nullify_char(str, ':');
 		// Dynamically expand array as needed
 		label = realloc(label, (jmp_num + 1) * sizeof(*label));
@@ -451,8 +468,17 @@ void asm_to_hex(char *str)
 // Converts hex string into Gen I items for 8F
 void hex_to_gen(char *str, int gen)
 {
+	// Error handler for weird item setups
+	struct Error errors = {0};
+
 	strip_spaces(str);
 	int len = strlen(str);
+	unsigned char seen_items[16][16] = {0};
+
+	// Warning placeholders
+	unsigned char glitch_items = 0;
+	unsigned char multi_key_items = 0;
+	unsigned char duplicate_items = 0;
 
 	printf("\nItem            Quantity\n");
 	printf("========================\n");
@@ -468,6 +494,7 @@ void hex_to_gen(char *str, int gen)
 		char l = str[i++];
 		char *item = (gen == 1 ? gen1_items[h][l] : gen2_items[h][l]);
 		char *quantity = calloc(4, sizeof(char));
+		unsigned char conversion = 0;
 
 		h_cursor += strlen(item);
 
@@ -475,7 +502,7 @@ void hex_to_gen(char *str, int gen)
 		if (str[i])
 		{
 			ascii2hex(str + i, 2);
-			unsigned char conversion = str[i++] << 4;
+			conversion = str[i++] << 4;
 			conversion |= str[i++];
 			sprintf(quantity, "%d", conversion);
 		}
@@ -483,9 +510,36 @@ void hex_to_gen(char *str, int gen)
 		else
 			quantity = "Any";
 
+		// Print item/quantity pairs
 		printf("%s", item);
 		for (; h_cursor < 16; h_cursor++)
 			printf(" ");
 		printf("x%s\n", quantity);
+
+		// [Error] Key items with 2+ quantity
+		if ((gen == 1 ? gen1_key_items[h][l] : gen2_key_items[h][l]))
+			if (conversion && conversion != 1)
+				errors.key_quantity = 1;
+		// [Error] Invalid or glitch items
+		if ((gen == 1 ? gen1_glitch_items[h][l] : gen2_glitch_items[h][l]))
+			errors.glitches = 1;
+		// [Error] Duplicate item stacks
+		if (seen_items[h][l] == 1)
+			errors.duplicates = 1;
+		else
+			seen_items[h][l] = 1;
 	}
+
+	// Print errors
+	if (show_warnings)
+		if (errors.key_quantity || errors.glitches || errors.duplicates)
+		{
+			printf("\n\n-- WARNING! --\n");
+			if (errors.duplicates)
+				printf(" * Duplicate item stacks detected!\n");
+			if (errors.key_quantity)
+				printf(" * Key item with 2+ quantity detected!\n");
+			if (errors.glitches)
+				printf(" * Invalid and/or glitch items detected!\n");
+		}
 }
