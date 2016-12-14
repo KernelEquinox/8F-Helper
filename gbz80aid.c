@@ -4,8 +4,7 @@
 #include "gbz80aid.h"
 
 
-void test();
-void usage(char*);
+void usage(char*) __attribute__ ((noreturn));
 void strip_spaces(char*);
 void lowercase(char*);
 void uppercase(char*);
@@ -21,6 +20,8 @@ void hex_to_gen(char*, int);
 
 // Global offset of current byte
 int cur_offset = 0;
+// Printing offset (for ASM format)
+int print_offset = 0;
 // Ability to define one named jump
 int jmp_offset = 0;
 // File line offset
@@ -42,15 +43,59 @@ int main(int argc, char* argv[])
 	// Parse arguments
 	for (int i = 0; i < argc; i++)
 	{
+		// GIVE US DEM FILE
 		if (!strcmp(argv[i], "-f"))
 		{
 			file_mode = 1;
 			filename = argv[++i];
+			// This means the previous line did an affectation from over the boundaries of argv !!
+			if(i == argc)
+			{
+				// The user supplied a "-f" option but no file to read from.
+				printf("Error : a file to read from is expected after \"-f\" !\n");
+				exit(1);
+			}
 		}
 		else if (!strcmp(argv[i], "-o"))
 			format = argv[++i];
+			// I'm just bounds checkin' ~
+			if(i == argc)
+			{
+				printf("Error : \"-o\" expects a format but nothing was found !\n");
+				exit(1);
+			}
 		else if (!strcmp(argv[i], "-h"))
+			// Note : -h will be accepted even if other options were read.
+			// Example : gbz80aid -o gen1 -h
+			// is valid and will simply print the usage.
 			usage(argv[0]);
+			
+			// Does not return.
+		else if (!strcmp(argv[i], "-v"))
+		{
+			printf("GBZ80 Aid\n");
+			printf("Version 1.1\n\n");
+			printf("Created by KernelEquinox\n");
+			printf("Contributions by ISSOtm\n\n");
+			printf("Homepage : http://github.com/KernelEquinox/8F-Helper/\n\n");
+			
+			exit(0);
+		}
+		else if (!strcmp(argv[i], "-ofs"))
+		{
+			i++;
+			if(i == argc)
+			{
+				printf("Error : \"-ofs\" expects an offset but nothing was found !\n");
+				exit(1);
+			}
+			
+			if(!sscanf(argv[i], "%4X", &print_offset))
+			{
+				printf("Error : \'-ofs\" expects an hexadecimal offset (ie. $D322 or 1f49h)\n");
+				exit(1);
+			}
+		}
 		else
 			input = argv[i];
 	}
@@ -66,11 +111,22 @@ int main(int argc, char* argv[])
 	if (file_mode)
 	{
 		FILE* file = fopen(filename, "r");
+		
+		if(!file)
+		{
+			printf("Error : specified file \"%s\" does not exist !\n", filename);
+			perror(filename);
+			
+			exit(1);
+		}
+		
 		char line[256];
 		while (fgets(line, sizeof(line), file))
 			asm_to_hex(line);
+		
 		uppercase(hex_string);
 		input = hex_string;
+		
 		fclose(file);
 	}
 
@@ -88,7 +144,8 @@ int main(int argc, char* argv[])
 		hex_to_gen(input, 2);
 	else
 		hex_to_asm(input);
-
+	
+	printf("\n");
 	return 0;
 }
 
@@ -98,14 +155,17 @@ void usage(char *str)
 {
 	printf("Usage: %s [options] [hex]\n\n", str);
 	printf("Options:\n");
-	printf("  -f file    File mode (read input from file)\n");
-	printf("  -o format  Display output in a specific format\n");
-	printf("  -h         Print this help message\n\n");
+	printf("  -f file      File mode (read input from file)\n");
+	printf("  -o format    Display output in a specific format\n");
+	printf("  -ofs offset  Specify memory offset to display in asm format.\n");
+	printf("                 Ignored in other formats\n");
+	printf("  -h           Print this help message and exit\n");
+	printf("  -v           Print version information and exit\n\n");
 	printf("Formats:\n");
-	printf("  asm        GB-Z80 assembly language\n");
-	printf("  hex        Hexadecimal GB-Z80 opcodes\n");
-	printf("  gen1       R/B/Y item codes for use with ACE\n");
-	printf("  gen2       G/S/C item codes for use with ACE\n\n");
+	printf("  asm          GB-Z80 assembly language\n");
+	printf("  hex          Hexadecimal GB-Z80 opcodes\n");
+	printf("  gen1         R/B/Y item codes for use with ACE\n");
+	printf("  gen2         G/S/C item codes for use with ACE\n\n");
 	printf("Examples:\n");
 	printf("  %s EA14D7C9\n", str);
 	printf("  %s -o asm -f bgb_mem.dump\n", str);
@@ -187,29 +247,62 @@ char* normalize_param(char *str)
 }
 
 
-// Converts ASCII to Hex
+// Reads hexadecimal written in ASCII, and replaces each character by its value.
 void ascii2hex(char *str, int len)
 {
-	char map[256] = {0};
-	map['0'] =  0, map['1'] =  1, map['2'] =  2, map['3'] =  3;
-	map['4'] =  4, map['5'] =  5, map['6'] =  6, map['7'] =  7;
-	map['8'] =  8, map['9'] =  9, map['A'] = 10, map['a'] = 10;
-	map['B'] = 11, map['b'] = 11, map['C'] = 12, map['c'] = 12;
-	map['D'] = 13, map['d'] = 13, map['E'] = 14, map['e'] = 14;
-	map['F'] = 15, map['f'] = 15;
+	char map[256] = {['0'] = 0,
+					 ['1'] = 1,
+					 ['2'] = 2,
+					 ['3'] = 3,
+					 ['4'] = 4,
+					 ['5'] = 5,
+					 ['6'] = 6,
+					 ['7'] = 7,
+					 ['8'] = 8,
+					 ['9'] = 9,
+					 ['A'] = 10,
+					 ['a'] = 10,
+					 ['B'] = 11,
+					 ['b'] = 11,
+					 ['C'] = 12,
+					 ['c'] = 12,
+					 ['D'] = 13,
+					 ['d'] = 13,
+					 ['E'] = 14,
+					 ['e'] = 14,
+					 ['F'] = 15,
+					 ['f'] = 15};
 
 	for (int i = 0; i < len; i++)
 		str[i] = map[str[i]];
 }
 
 
-// Converts an instruction into its hexadecimal equivalent
+// Converts an instruction into its hexadecimal equivalent.
 char* op2hex(char *opcode, char *param, char *args)
 {
 	char *hex = calloc(7, sizeof(char));
-	char *opcode_hex = malloc(3 * sizeof(char));
-	int cb = 0;
-
+	char opcode_hex[3];
+	int cb = 0; // Flags if this instruction is CB-prefixed.
+	
+	// Some syntaxes use '[' instead of '('. These being strictly equivalent, we'll replace brackets if we find some.
+	// We'll only look at the first occurence since no instruction uses parentheses twice.
+	char* parenthesis = strchr(param, '[');
+	if(parenthesis)
+	{
+		*parenthesis = '(';
+		
+		parenthesis = strchr(param, ']');
+		if(!parenthesis)
+		{
+			// Please, be consistent.
+			printf("Couldn't parse [%s %s] on line %d\n", opcode, param, line_num);
+			exit(1);
+		}
+		*parenthesis = ')';
+	}
+	
+	// Scan the list of prefixed instructions.
 	for (int x = 0; x < 11; x++)
 		if (!strcmp(opcode, cb_set[x]))
 		{
@@ -220,8 +313,8 @@ char* op2hex(char *opcode, char *param, char *args)
 	// Check the lookup table for matches
 	for (int i = 0; i < 16; i++)
 		for (int k = 0; k < 16; k++)
-			if (!strcmp(opcode, (cb ? cb_opcode_table[i][k] : opcode_table[i][k])) &&
-				!strcmp(param, (cb ? cb_param_table[i][k] : param_table[i][k])))
+			if (!strcmp(opcode, (cb ? cb_opcode_table : opcode_table)[i][k]) &&
+			    !strcmp(param,  (cb ? cb_param_table  : param_table)[i][k]))
 			{
 				int index = (i << 4) | k;
 				sprintf(opcode_hex, "%02x", index);
@@ -239,17 +332,17 @@ char* op2hex(char *opcode, char *param, char *args)
 // Converts a jump label into a jump address
 void jump2addr(char *param, int rel)
 {
-	char *addr;
+	char str[5];
+	char *addr = str;
 	int i = 0, index = 0;
 	int size = (rel ? 3 : 5);
 
 	unsigned char jmp_rel = ~(cur_offset - jmp_offset) - 1;
 
-	addr = malloc(5 * sizeof(char));
 	if (rel)
-		sprintf(addr, "%02x", jmp_rel);
+		sprintf(str, "%02x", jmp_rel);
 	else
-		sprintf(addr, "%04x", jmp_offset);
+		sprintf(str, "%04x", jmp_offset);
 	if (param[0] == ',')
 		index++;
 	param[index++] = '$';
@@ -266,22 +359,20 @@ void jump2addr(char *param, int rel)
 void hex_to_asm(char *str)
 {
 	// Reset current offset for printing purposes
-	cur_offset = 0;
-
+	cur_offset = print_offset;
+	
 	// Remove spaces and calculate length
 	strip_spaces(str);
 	int len = strlen(str);
 
 	// Make modifiable copy of input string
-	char *bytes = malloc(len * sizeof(char) + 1);
-	memset(bytes, 0, len);
+	char bytes[len + 1];
 	strcpy(bytes, str);
 
 	// Translate the hex string into a byte array
 	ascii2hex(str, len);
 
 	printf("\ngbz80 Assembly:\n\n");
-	cur_offset = 0;
 
 	// Loop through each opcode
 	for (int i = 0; i < len;)
@@ -435,14 +526,20 @@ void asm_to_hex(char *str)
 
 	// Normalize second parameter for table lookup
 	if (!*args)
+	{
+		free(args);
 		args = normalize_param(param2);
+	}
 
 	// Combine parameters
 	strcat(param, param2);
 
 	if (!strcmp(opcode, "stop"))
+	{
+		free(args);
 		args = "01";
-
+	}
+	
 	// Get hex equivalent of instruction
 	char *cur_hex = op2hex(opcode, param, args);
 
@@ -455,6 +552,10 @@ void asm_to_hex(char *str)
 	// These are for jump correction and error handling
 	cur_offset += strlen(cur_hex) / 2;
 	line_num++;
+	
+	// Free allocated string as it goes out of scope.
+	if(strcmp(opcode, "stop"))
+		free(args);
 }
 
 
@@ -499,3 +600,4 @@ void hex_to_gen(char *str, int gen)
 		printf("x%s\n", quantity);
 	}
 }
+
