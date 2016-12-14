@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
 			file_mode = 1;
 			filename = argv[++i];
 			// This means the previous line did an affectation from over the boundaries of argv !!
-			if(i == argc)
+			if (i == argc)
 			{
 				// The user supplied a "-f" option but no file to read from.
 				printf("Error : a file to read from is expected after \"-f\" !\n");
@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
 		else if (!strcmp(argv[i], "-o"))
 			format = argv[++i];
 			// I'm just bounds checkin' ~
-			if(i == argc)
+			if (i == argc)
 			{
 				printf("Error : \"-o\" expects a format but nothing was found !\n");
 				exit(1);
@@ -84,13 +84,13 @@ int main(int argc, char* argv[])
 		else if (!strcmp(argv[i], "-ofs"))
 		{
 			i++;
-			if(i == argc)
+			if (i == argc)
 			{
 				printf("Error : \"-ofs\" expects an offset but nothing was found !\n");
 				exit(1);
 			}
 			
-			if(!sscanf(argv[i], "%4X", &print_offset))
+			if (!sscanf(argv[i], "%4X", &print_offset))
 			{
 				printf("Error : \'-ofs\" expects an hexadecimal offset (ie. $D322 or 1f49h)\n");
 				exit(1);
@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
 	{
 		FILE* file = fopen(filename, "r");
 		
-		if(!file)
+		if (!file)
 		{
 			printf("Error : specified file \"%s\" does not exist !\n", filename);
 			perror(filename);
@@ -288,18 +288,63 @@ char* op2hex(char *opcode, char *param, char *args)
 	// Some syntaxes use '[' instead of '('. These being strictly equivalent, we'll replace brackets if we find some.
 	// We'll only look at the first occurence since no instruction uses parentheses twice.
 	char* parenthesis = strchr(param, '[');
-	if(parenthesis)
+	if (parenthesis)
 	{
 		*parenthesis = '(';
 		
 		parenthesis = strchr(param, ']');
-		if(!parenthesis)
+		if (!parenthesis)
 		{
 			// Please, be consistent.
 			printf("Couldn't parse [%s %s] on line %d\n", opcode, param, line_num);
 			exit(1);
 		}
 		*parenthesis = ')';
+	}
+	
+	// WARNING : puth this code block AFTER the "bracket to parenthesis" block !
+	
+	// We will look for "ldi (hl)", and alternative to "ld (hli)". Same for ldd.
+	if (!strncmp(opcode, "ldi", 3) && !strncmp(opcode, "ldd", 3))
+	{
+		// Okay. We need to replace the opcode with "ld" and the "hl" argument by "hl+".
+		// We need to allocate one more byte to make room for "hli". +2 because +1 for the i, and +1 for the terminator.
+		int len = strlen(param) + 2;
+		// Keep a pointer to the original pointer for the copy.
+		char* old_param = param;
+		// This will be the ne parameter.
+		param = malloc(len * sizeof(char));
+		// We now copy the opcode, adding the character after "hl".
+		for(int i = 0; i < len; i++)
+		{
+			// We check if we just copied a parenthesis, signaling we finished copying the "hl".
+			// It cannot be a bracket, since we normalized it right before !
+			if (*old_param == ')')
+			{
+				param[i] = opcode[2];
+				i++;
+			}
+			
+			param[i] = *old_param;
+			i++;
+			old_param++;
+		}
+		
+		opcode[2] = '\0'; // Remove the "i" in "ldi".
+	}
+	
+	char* hl_repl = strstr(param, "hli");
+	if (hl_repl)
+	{
+		// We replace hli with hl+.
+		*(hl_repl + 2 * sizeof(char)) = '+';
+	}
+	
+	hl_repl = strstr(param, "hld");
+	if (hl_repl)
+	{
+		// We replace hld with hl-.
+		*(hl_repl + 2 * sizeof(char)) = '-';
 	}
 	
 	// Scan the list of prefixed instructions.
@@ -381,7 +426,7 @@ void hex_to_asm(char *str)
 		int h_cursor = 0;
 
 		// Print current offset
-		printf("% 4X  ", cur_offset);
+		printf("%04X  ", cur_offset);
 		h_cursor += 6;
 
 		// Split high and low nybble as indices
@@ -423,9 +468,8 @@ void hex_to_asm(char *str)
 		int offset = (cb ? 9 : offset_table[h][l]);
 
 		// Create modifiable copy of parameter string
-		char *parameters = malloc(param_len * sizeof(char));
-		memset(parameters, 0, param_len);
-		strcpy(parameters, (cb ? cb_param_table[h][l] : param_table[h][l]));
+		char parameters[param_len];
+		strcpy(parameters, (cb ? cb_param_table : param_table)[h][l]);
 
 		// Modify mnemonic string if required
 		for (int x = 0; x < (arg_size * 2); x++)
@@ -448,8 +492,47 @@ void hex_to_asm(char *str)
 			printf(" ");
 		printf("%s", instruction);
 		h_cursor += strlen(instruction);
-
-		for (; h_cursor < 28; h_cursor++)
+		
+		if (instruction[0] == 'j')
+		{
+			// We'll be making special cases of the jump operations.
+			if (parameters[0] == 'n')
+			{
+				// That's NC or NZ.
+				// We remove the comma.
+				parameters[2] = '\0';
+				printf(" %s,", parameters);
+				h_cursor += 4;
+				
+				// Now we copy the hex to the rest.
+				strcpy(parameters, &parameters[3]);
+			}
+			else if (parameters[0] != '$')
+			{
+				// That's C or Z.
+				// Same.
+				parameters[1] = '\0';
+				printf("  %s,", parameters);
+				h_cursor += 4;
+				
+				strcpy(parameters, &parameters[2]);
+			}
+			
+			if (instruction[1] == 'r')
+			{
+				// We will compute the address of the JR instead of displaying the offset.
+				signed char jump_offset;
+				sscanf(&parameters[1], "%2X", &jump_offset);
+				int jump_target = (signed int)jump_offset;
+				jump_target += cur_offset;
+				
+				for (; h_cursor < 29; h_cursor++)
+					printf(" ");
+				printf("$%04X", jump_target);
+				parameters[0] = '\0'; // We displayed the address. Nothing to do anymore.
+			}
+		}
+		for (; h_cursor < 29; h_cursor++)
 			printf(" ");
 		printf("%s\n", parameters);
 	}
@@ -554,7 +637,7 @@ void asm_to_hex(char *str)
 	line_num++;
 	
 	// Free allocated string as it goes out of scope.
-	if(strcmp(opcode, "stop"))
+	if (strcmp(opcode, "stop")) // Don't try to free() if "stop" is the opcode, as then "args" has already been free'd.
 		free(args);
 }
 
@@ -578,7 +661,8 @@ void hex_to_gen(char *str, int gen)
 		char h = str[i++];
 		char l = str[i++];
 		char *item = (gen == 1 ? gen1_items[h][l] : gen2_items[h][l]);
-		char *quantity = calloc(4, sizeof(char));
+		// If we don't specify the quantity, then this is a default.
+		char quantity[4] = "Any";
 
 		h_cursor += strlen(item);
 
@@ -590,9 +674,6 @@ void hex_to_gen(char *str, int gen)
 			conversion |= str[i++];
 			sprintf(quantity, "%d", conversion);
 		}
-		// Set as "Any" if any quantity will do
-		else
-			quantity = "Any";
 
 		printf("%s", item);
 		for (; h_cursor < 16; h_cursor++)
