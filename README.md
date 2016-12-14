@@ -8,26 +8,29 @@ You can download the latest version of the 8F Helper on the [releases](https://g
 
 ## Usage
 ```
-Usage: gbz80aid [options] [hex]
+Usage: gbz80aid2 [options] [hex]
 
 Options:
-  -f file    File mode (read input from file)
-  -o format  Display output in a specific format
-  -w         Disable item warning messages
-  -h         Print this help message
+  -f file      File mode (read input from file)
+  -o format    Display output in a specific format
+  -ofs offset  Specify memory offset to display in asm format.
+                 (Ignored in other formats)
+  -w           Disable item warning messages
+  -h           Print this help message and exit
+  -v           Print version information and exit
 
 Formats:
-  asm        GB-Z80 assembly language
-  hex        Hexadecimal GB-Z80 opcodes
-  gen1       R/B/Y item codes for use with ACE
-  gen2       G/S/C item codes for use with ACE
+  asm          GB-Z80 assembly language
+  hex          Hexadecimal GB-Z80 opcodes
+  gen1         R/B/Y item codes for use with ACE
+  gen2         G/S/C item codes for use with ACE
 
 Examples:
-  gbz80aid EA14D7C9
-  gbz80aid -o asm -f bgb_mem.dump
-  gbz80aid -o hex -f zzazz.asm
-  gbz80aid -o gen1 0E1626642EBB4140CDD635C9
-  gbz80aid -o gen2 -f coin_case.asm
+  gbz80aid2 EA14D7C9
+  gbz80aid2 -o asm -f bgb_mem.dump
+  gbz80aid2 -o hex -f zzazz.asm
+  gbz80aid2 -o gen1 0E1626642EBB4140CDD635C9
+  gbz80aid2 -o gen2 -f coin_case.asm
 ```
 
 ## Examples
