@@ -493,7 +493,8 @@ void hex_to_asm(char *str)
 		printf("%s", instruction);
 		h_cursor += strlen(instruction);
 		
-		if (instruction[0] == 'j')
+		// The second verification verifies this isn't a "jp (hl)".
+		if (instruction[0] == 'j' && parameters[0] != '(')
 		{
 			// We'll be making special cases of the jump operations.
 			if (parameters[0] == 'n')
