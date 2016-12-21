@@ -765,7 +765,8 @@ void hex_to_joy(char* str)
 				}
 
 		// Keep track of the last button for correction
-		last = buttons[index - 1];
+		if (index)
+			last = buttons[index - 1];
 
 		// Print out the button combination for this byte
 		for (int x = 0; x < index; x++)
