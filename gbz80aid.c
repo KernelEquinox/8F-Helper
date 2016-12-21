@@ -11,11 +11,12 @@ void uppercase(char*);
 void nullify_char(char*, char);
 char* normalize_param(char*);
 void ascii2hex(char*, int);
-void jump2addr(char*);
+void jump2addr(char*, int);
 char* op2hex(char*, char*, char*);
-void hex_to_asm(char*);
+void hex_to_asm(char*, int);
 void asm_to_hex(char*);
 void hex_to_gen(char*, int);
+void hex_to_joy(char*);
 
 
 // Struct for holding label information
@@ -35,7 +36,7 @@ struct Error {
 // Global offset of current byte
 int cur_offset = 0;
 
-// Printing offset (for ASM format)
+// Offset to begin calulating at
 int print_offset = 0;
 
 // Ability to define multiple labels
@@ -130,6 +131,9 @@ int main(int argc, char* argv[])
 			input = argv[i];
 	}
 
+	// Set the current offset to the specified offset
+	cur_offset = print_offset;
+
 	// Default to asm if no format was selected
 	if (!format)
 		format = "asm";
@@ -158,7 +162,7 @@ int main(int argc, char* argv[])
 		fclose(file);
 	}
 
-	// Reset offset if modified
+	// Reset the current offset, since it was probably modified
 	cur_offset = print_offset;
 
 	// Print results
@@ -173,8 +177,12 @@ int main(int argc, char* argv[])
 		hex_to_gen(input, 1);
 	else if (!strcmp(format, "gen2"))
 		hex_to_gen(input, 2);
+	else if (!strcmp(format, "joy"))
+		hex_to_joy(input);
+	else if (!strcmp(format, "bgb"))
+		hex_to_asm(input, 1);
 	else
-		hex_to_asm(input);
+		hex_to_asm(input, 0);
 	
 	printf("\n");
 	return 0;
@@ -195,7 +203,9 @@ void usage(char *str)
 	printf("  -v           Print version information and exit\n\n");
 	printf("Formats:\n");
 	printf("  asm          GB-Z80 assembly language\n");
-	printf("  hex          Hexadecimal GB-Z80 opcodes\n");
+	printf("  bgb          BGB-style assembly language\n");
+	printf("  hex          Hexadecimal machine code format\n");
+	printf("  joy          Joypad values\n");
 	printf("  gen1         R/B/Y item codes for use with ACE\n");
 	printf("  gen2         G/S/C item codes for use with ACE\n\n");
 	printf("Examples:\n");
@@ -345,8 +355,12 @@ char* op2hex(char *opcode, char *param, char *args)
 	// Check the lookup table for matches
 	for (int i = 0; i < 16; i++)
 		for (int k = 0; k < 16; k++)
-			if (!strcmp(opcode, (cb ? cb_opcode_table : opcode_table)[i][k]) &&
-			    !strcmp(param,  (cb ? cb_param_table  : param_table)[i][k]))
+			if ((!strcmp(opcode, cb_opcode_table[i][k]) &&
+				!strcmp(param, cb_param_table[i][k])) ||
+				(!strcmp(opcode, bgb_opcode_table[i][k]) &&
+				!strcmp(param, bgb_param_table[i][k])) ||
+				(!strcmp(opcode, opcode_table[i][k]) &&
+				!strcmp(param, param_table[i][k])))
 			{
 				int index = (i << 4) | k;
 				sprintf(opcode_hex, "%02x", index);
@@ -361,16 +375,19 @@ char* op2hex(char *opcode, char *param, char *args)
 }
 
 
-// Converts a jump label into a relative jump address
-void jump2addr(char *param)
+// Converts a jump label into a jump address
+void jump2addr(char *param, int type)
 {
 	for (int i = 0; i < jmp_num; i++)
 	{
 		if (!strcmp(label[i].name, param))
 		{
-			unsigned char addr = ~(cur_offset - label[i].address) - 1;
 			param[0] = '$';
-			sprintf(param + 1, "%x", addr & 0xFF);
+			if (type)
+				sprintf(param + 1, "%x", (label[i].address - cur_offset - 2) & 0xFF);
+			else
+				sprintf(param + 1, "%04x", label[i].address);
+			param[(type ? 3 : 5)] = 0;
 		}
 	}
 }
@@ -380,7 +397,7 @@ void jump2addr(char *param)
 
 
 // Converts hex to asm and prints the results
-void hex_to_asm(char *str)
+void hex_to_asm(char *str, int bgb)
 {
 	// Remove spaces and calculate length
 	strip_spaces(str);
@@ -393,7 +410,7 @@ void hex_to_asm(char *str)
 	// Translate the hex string into a byte array
 	ascii2hex(str, len);
 
-	printf("\ngbz80 Assembly:\n\n");
+	printf("\n%sgbz80 Assembly:\n\n", (bgb ? "BGB " : ""));
 
 	// Loop through each opcode
 	for (int i = 0; i < len;)
@@ -439,15 +456,40 @@ void hex_to_asm(char *str)
 		}
 
 		// Mnemonic formatting variables
-		char *instruction = (cb ? cb_opcode_table[h][l] : opcode_table[h][l]);
-		int param_len = (strlen((cb ? cb_param_table[h][l] : param_table[h][l]))) + 1;
-		int arg_size = (cb ? 0 : size_table[h][l]);
-		int offset = (cb ? 9 : offset_table[h][l]);
+		char *instruction;
+		int param_len = 0;
+		int arg_size = 0;
+		int offset = 0;
+
+		if (cb)
+		{
+			instruction = cb_opcode_table[h][l];
+			param_len = strlen(cb_param_table[h][l]) + 1;
+		}
+		else if (bgb)
+		{
+			instruction = bgb_opcode_table[h][l];
+			param_len = strlen(bgb_param_table[h][l]) + 1;
+			arg_size = size_table[h][l];
+			offset = bgb_offset_table[h][l];
+		}
+		else
+		{
+			instruction = opcode_table[h][l];
+			param_len = strlen(param_table[h][l]) + 1;
+			arg_size = size_table[h][l];
+			offset = offset_table[h][l];
+		}
 
 		// Create modifiable copy of parameter string
 		char *parameters = malloc(param_len * sizeof(char));
 		memset(parameters, 0, param_len);
-		strcpy(parameters, (cb ? cb_param_table[h][l] : param_table[h][l]));
+		if (cb)
+			strcpy(parameters, cb_param_table[h][l]);
+		else if (bgb)
+			strcpy(parameters, bgb_param_table[h][l]);
+		else
+			strcpy(parameters, param_table[h][l]);
 
 		// Modify mnemonic string if required
 		for (int x = 0; x < (arg_size * 2); x++)
@@ -530,11 +572,11 @@ void asm_to_hex(char *str)
 
 	// Detect comma location and parse accordingly
 	char *comma = strchr(str, ',');
-	if (!strcmp(opcode, "jr"))
+	if (opcode[0] == 'j')
 		if (comma)
-	 		jump2addr(comma + 1);
+	 		jump2addr(comma + 1, (opcode[1] == 'r' ? 1 : 0));
 	 	else
-	 		jump2addr(str + i);
+	 		jump2addr(str + i, (opcode[1] == 'r' ? 1 : 0));
 	args = normalize_param(str);
 
 	// The rest of the string is parameter data
@@ -646,3 +688,93 @@ void hex_to_gen(char *str, int gen)
 		}
 }
 
+// Converts hex string into joypad values for use with Full Control method
+// http://forums.glitchcity.info/index.php?topic=7744.0
+void hex_to_joy(char* str)
+{
+	strip_spaces(str);
+	int len = strlen(str);
+	ascii2hex(str, len);
+
+	// Placeholder for the last button value
+	char *last;
+
+	printf("\nJoypad Values:\n\n");
+
+	// Print an initial A to skip the junk byte
+	printf("A\n");
+
+	// Total number of button presses, just for funsies
+	// 3 = The initial A and the ending START + SELECT
+	int presses = 3;
+
+	for (int i = 0; i < len;)
+	{
+		char p14 = str[i++];
+		char p15 = str[i++];
+		char *buttons[12] = {0};
+		int index = 0;
+
+		// Collect all D-Pad values
+		for (int x = 0; x < 4; x++)
+			if (joy_vals[x] <= p14)
+			{
+				buttons[index++] = joy_high[x];
+				p14 -= joy_vals[x];
+				presses++;
+			}
+
+		// Collect all other values
+		for (int x = 0; x < 4; x++)
+			if (joy_vals[x] <= p15)
+			{
+				buttons[index++] = joy_low[x];
+				p15 -= joy_vals[x];
+				presses++;
+			}
+
+		// Check if 1st button = NEXT code
+		if (buttons[0] == last)
+			// Swap buttons if more than 1 exists
+			if (buttons[1] != 0)
+			{
+				char *tmp = buttons[0];
+				buttons[0] = buttons[1];
+				buttons[1] = tmp;
+			}
+			// Overflow the byte for correction if only 1 exists
+			else
+				if (last == "DOWN")
+				{
+					char *tmp = buttons[0];
+					buttons[0] = "UP";
+					buttons[1] = "DOWN";
+					buttons[2] = "UP";
+					buttons[3] = tmp;
+					index += 3;
+					presses += 3;
+				}
+				else
+				{
+					char *tmp = buttons[0];
+					buttons[0] = "DOWN";
+					buttons[1] = tmp;
+					buttons[2] = "DOWN";
+					presses += 2;
+					index += 2;
+				}
+
+		// Keep track of the last button for correction
+		last = buttons[index - 1];
+
+		// Print out the button combination for this byte
+		for (int x = 0; x < index; x++)
+			printf("%s ", buttons[x]);
+		printf("%s\n", last);
+		presses++;
+	}
+
+	// Print the EXIT code and number of button presses
+	printf("START + SELECT\n\n");
+	printf("Total number of button presses: %d\n", presses);
+}

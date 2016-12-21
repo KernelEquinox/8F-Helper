@@ -142,6 +142,130 @@ char* param_table[16][16] = {
 	 "",            "",          "$xx",        "38h"}
 };
 
+// Offsets of bgb-style data insertion points
+unsigned char bgb_offset_table[16][16] = {
+	{0,3,0,0,0,0,2,0,0,0,0,0,0,0,2,0},
+	{0,3,0,0,0,0,2,0,0,0,0,0,0,0,2,0},
+	{3,3,0,0,0,0,2,0,2,0,0,0,0,0,2,0},
+	{3,3,0,0,0,0,5,0,2,0,0,0,0,0,2,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+	{0,0,3,0,3,0,2,0,0,0,2,0,2,0,2,0},
+	{0,0,3,0,3,0,0,0,0,0,2,0,2,0,2,0},
+	{6,0,0,0,0,0,0,0,3,0,1,0,0,0,0,0},
+	{8,0,0,0,0,0,0,0,6,0,3,0,0,0,0,0}
+};
+
+// Non-prefixed bgb-style gbz80 instructions
+char* bgb_opcode_table[16][16] = {
+	{"nop",   "ld",    "ld",    "inc",   "inc",   "dec",   "ld",    "rlca",
+	 "ld",    "add",   "ld",    "dec",   "inc",   "dec",   "ld",    "rrca"},
+	{"stop",  "ld",    "ld",    "inc",   "inc",   "dec",   "ld",    "rla",
+	 "jr",    "add",   "ld",    "dec",   "inc",   "dec",   "ld",    "rra"},
+	{"jr",    "ld",    "ldi",    "inc",   "inc",   "dec",   "ld",    "daa",
+	 "jr",    "add",   "ldi",    "dec",   "inc",   "dec",   "ld",    "cpl"},
+	{"jr",    "ld",    "ldd",    "inc",   "inc",   "dec",   "ld",    "scf",
+	 "jr",    "add",   "ldd",    "dec",   "inc",   "dec",   "ld",    "ccf"},
+	{"ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",
+	 "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld"},
+	{"ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",
+	 "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld"},
+	{"ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",
+	 "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld"},
+	{"ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "halt",  "ld",
+	 "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld",    "ld"},
+	{"add",   "add",   "add",   "add",   "add",   "add",   "add",   "add",
+	 "adc",   "adc",   "adc",   "adc",   "adc",   "adc",   "adc",   "adc"},
+	{"sub",   "sub",   "sub",   "sub",   "sub",   "sub",   "sub",   "sub",
+	 "sbc",   "sbc",   "sbc",   "sbc",   "sbc",   "sbc",   "sbc",   "sbc"},
+	{"and",   "and",   "and",   "and",   "and",   "and",   "and",   "and",
+	 "xor",   "xor",   "xor",   "xor",   "xor",   "xor",   "xor",   "xor"},
+	{"or",    "or",    "or",    "or",    "or",    "or",    "or",    "or",
+	 "cp",    "cp",    "cp",    "cp",    "cp",    "cp",    "cp",    "cp"},
+	{"ret",   "pop",   "jp",    "jp",    "call",  "push",  "add",   "rst",
+	 "ret",   "ret",   "jp",    "-",     "call",  "call",  "adc",   "rst"},
+	{"ret",   "pop",   "jp",    "-",     "call",  "push",  "sub",   "rst",
+	 "ret",   "reti",  "jp",    "-",     "call",  "-",     "sbc",   "rst"},
+	{"ld",   "pop",   "ld",    "-",     "-",     "push",  "and",   "rst",
+	 "add",   "jp",    "ld",    "-",     "-",     "-",     "xor",   "rst"},
+	{"ld",   "pop",   "ld",    "di",    "-",     "push",  "or",    "rst",
+	 "ld",    "ld",    "ld",    "ei",     "-",     "-",     "cp",    "rst"}
+};
+
+// Non-prefixed bgb-style gbz80 parameters
+char* bgb_param_table[16][16] = {
+	{"",            "bc,xxyy",  "(bc),a",     "bc",
+	 "b",           "b",         "b,xx",      "",
+	 "(xxyy),sp",  "hl,bc",     "a,(bc)",     "bc",
+	 "c",           "c",         "c,xx",      ""},
+	{"",           "de,xxyy",  "(de),a",     "de",
+	 "d",           "d",         "d,xx",      "",
+	 "xx",         "hl,de",     "a,(de)",     "de",
+	 "e",           "e",         "e,xx",      ""},
+	{"nz,xx",      "hl,xxyy",  "(hl),a",    "hl",
+	 "h",           "h",         "h,xx",      "",
+	 "z,xx",       "hl,hl",     "a,(hl)",    "hl",
+	 "l",           "l",         "l,xx",      ""},
+	{"nc,xx",      "sp,xxyy",  "(hl),a",    "sp",
+	 "(hl)",        "(hl)",      "(hl),xx",   "",
+	 "c,xx",       "hl,sp",     "a,(hl)",    "sp",
+	 "a",           "a",         "a,xx",      ""},
+	{"b,b",         "b,c",       "b,d",        "b,e",
+	 "b,h",         "b,l",       "b,(hl)",     "b,a",
+	 "c,b",         "c,c",       "c,d",        "c,e",
+	 "c,h",         "c,l",       "c,(hl)",     "c,a"},
+	{"d,b",         "d,c",       "d,d",        "d,e",
+	 "d,h",         "d,l",       "d,(hl)",     "d,a",
+	 "e,b",         "e,c",       "e,d",        "e,e",
+	 "e,h",         "e,l",       "e,(hl)",     "e,a"},
+	{"h,b",         "h,c",       "h,d",        "h,e",
+	 "h,h",         "h,l",       "h,(hl)",     "h,a",
+	 "l,b",         "l,c",       "l,d",        "l,e",
+	 "l,h",         "l,l",       "l,(hl)",     "l,a"},
+	{"(hl),b",      "(hl),c",    "(hl),d",     "(hl),e",
+	 "(hl),h",      "(hl),l",    "",           "(hl),a",
+	 "a,b",         "a,c",       "a,d",        "a,e",
+	 "a,h",         "a,l",       "a,(hl)",     "a,a"},
+	{"a,b",         "a,c",       "a,d",        "a,e",
+	 "a,h",         "a,l",       "a,(hl)",     "a,a",
+	 "a,b",         "a,c",       "a,d",        "a,e",
+	 "a,h",         "a,l",       "a,(hl)",     "a,a"},
+	{"b",           "c",         "d",          "e",
+	 "h",           "l",         "(hl)",       "a",
+	 "a,b",         "a,c",       "a,d",        "a,e",
+	 "a,h",         "a,l",       "a,(hl)",     "a,a"},
+	{"b",           "c",         "d",          "e",
+	 "h",           "l",         "(hl)",       "a",
+	 "b",           "c",         "d",          "e",
+	 "h",           "l",         "(hl)",       "a"},
+	{"b",           "c",         "d",          "e",
+	 "h",           "l",         "(hl)",       "a",
+	 "b",           "c",         "d",          "e",
+	 "h",           "l",         "(hl)",       "a"},
+	{"nz",          "bc",        "nz,xxyy",   "xxyy",
+	 "nz,xxyy",    "bc",        "a,xx",      "00h",
+	 "z",           "",          "z,xxyy",    "cb",
+	 "z,xxyy",     "xxyy",     "a,xx",      "08h"},
+	{"nc",          "de",        "nc,xxyy",   "",
+	 "nc,xxyy",    "de",        "xx",        "10h",
+	 "c",           "",          "c,xxyy",    "",
+	 "c,xxyy",     "",          "a,xx",      "18h"},
+	{"(FF00+xx),a",     "hl",        "(FF00+c),a",      "",
+	 "",            "hl",        "xx",        "20h",
+	 "sp,xx",      "(hl)",      "(xxyy),a",  "",
+	 "",            "",          "xx",        "28h"},
+	{"a,(FF00+xx)",     "af",        "a,(FF00+c)",      "",
+	 "",            "af",        "xx",        "30h",
+	 "hl,sp+xx",   "sp,hl",     "a,(xxyy)",  "",
+	 "",            "",          "xx",        "38h"}
+};
+
 // Prefixed gbz80 instructions
 char *cb_opcode_table[16][16] = {
 	{"rlc",   "rlc",   "rlc",   "rlc",   "rlc",   "rlc",   "rlc",   "rlc",   
@@ -432,3 +556,7 @@ char *gen2_items[16][16] = {
 	 "HM06",           "HM07",            "HM08",            "HM09",
 	 "HM10",           "HM11",            "HM12",            "CANCEL (HM13)"}
 };
+
+unsigned char joy_vals[4] = {8, 4, 2, 1};
+char *joy_high[4] = {"DOWN", "UP", "LEFT", "RIGHT"};
+char *joy_low[4] = {"START", "SELECT", "B", "A"};
