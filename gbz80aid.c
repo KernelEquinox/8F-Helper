@@ -102,7 +102,7 @@ int main(int argc, char* argv[])
 		else if (!strcmp(argv[i], "-v"))
 		{
 			printf("GBZ80 Aid\n");
-			printf("Version 1.1\n\n");
+			printf("Version 1.2\n\n");
 			printf("Created by KernelEquinox\n");
 			printf("Contributions by ISSOtm\n\n");
 			printf("Homepage : http://github.com/KernelEquinox/8F-Helper/\n\n");
